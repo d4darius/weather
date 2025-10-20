@@ -20,13 +20,13 @@ They must follow certain specifications.
 
 - Tool names SHOULD be between 1 and 128 characters in length (inclusive).
 - Tool names SHOULD be considered case-sensitive.
-- The following SHOULD be the only allowed characters: uppercase and lowercase ASCII letters (A-Z, a-z), digits (0-9), underscore (_), dash (-), and dot (.)
+- The following SHOULD be the only allowed characters: uppercase and lowercase ASCII letters (A-Z, a-z), digits (0-9), underscore (\_), dash (-), and dot (.)
 - Tool names SHOULD NOT contain spaces, commas, or other special characters.
 - Tool names SHOULD be unique within a server.
 - Example valid tool names:
-    - getUser
-    - DATA_EXPORT_v2
-    - admin.tools.list
+  - getUser
+  - DATA_EXPORT_v2
+  - admin.tools.list
 
 ### System Specifications
 
@@ -62,118 +62,81 @@ touch weather.py
 
 # MCP Implementation
 
-We are building a MCP server that exposes mainly two tools: `get_alerts` and `get_forecast`. 
+We are building a MCP server that exposes mainly two tools: `get_alerts` and `get_forecast`.
 
 ## Instance
 
 First of all we must setup the MCP instance.
 
 ```python
-from typing import Any
-import httpx
-from mcp.server.fastmcp import FastMCP
+LOCAL = True
 
 # Initialize FastMCP server
-mcp = FastMCP("weather")
+if LOCAL:
+    mcp = FastMCP("weather")
+else:
+    port = os.environ.get("PORT", 10000)
+    mcp = FastMCP("weather", host="0.0.0.0", port=port)mcp = FastMCP("weather")
 
 # Constants
 NWS_API_BASE = "https://api.weather.gov"
+OPENMETEO_API_BASE = "https://api.open-meteo.com/v1"
 USER_AGENT = "weather-app/1.0"
 ```
 
 The FastMCP class uses Python type hints and docstrings to automatically generate tool definitions, making it easy to create and maintain MCP tools.
 
+- LOCAL is a constant that controls whether the server is running locally or on a remote server
+
 ## Helper functions
 
 We then add helper functions to query and format the data from the National Weather Service API.
 
-```python
-async def make_nws_request(url: str) -> dict[str, Any] | None:
-    """Make a request to the NWS API with proper error handling."""
-    headers = {
-        "User-Agent": USER_AGENT,
-        "Accept": "application/geo+json"
-    }
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(url, headers=headers, timeout=30.0)
-            response.raise_for_status()
-            return response.json()
-        except Exception:
-            return None
+### `make_geocode_request`
 
-def format_alert(feature: dict) -> str:
-    """Format an alert feature into a readable string."""
-    props = feature["properties"]
-    return f"""
-Event: {props.get('event', 'Unknown')}
-Area: {props.get('areaDesc', 'Unknown')}
-Severity: {props.get('severity', 'Unknown')}
-Description: {props.get('description', 'No description available')}
-Instructions: {props.get('instruction', 'No specific instructions provided')}
-"""
-```
+Performs geocoding via the Nominatim (OpenStreetMap) search API to convert a free-form place name into geographic coordinates and a display name. Used by tools that accept human location strings so they can resolve a place into lat/lon for downstream weather queries.
+
+### `make_nws_request`
+
+Centralized requester for National Weather Service endpoints. Handles HTTP calls to NWS (with appropriate headers and timeouts) and provides a single place to manage NWS-related network/error handling for other tools (points, forecasts, alerts).
+
+### `format_alert`
+
+Converts a raw NWS alert feature into a compact, human-readable text block summarizing the important fields (event, affected area, severity, description, instructions). Used to present alerts returned by the alerts tool in a readable format.
+
+### `make_openmeteo_request`
+
+Fallback weather fetcher that queries the Open-Meteo API for current conditions and short-range forecasts. Used when NWS data is unavailable or when a non-NWS provider is preferred; centralizes the Open-Meteo query parameters and network handling.
+
+### `format_openmeteo_forecast`
+
+Transforms Open-Meteo response payloads into a concise, readable forecast summary (current conditions plus the next few days). Used to present the Open-Meteo fallback data in the same human-friendly format as the primary forecast output.
 
 ## Tool Execution Logic
 
 The tool execution logic is responsible for actually executing the logic of each tool.
 
-```python
-@mcp.tool()
-async def get_alerts(state: str) -> str:
-    """Get weather alerts for a US state.
+I'll create a short todo entry and mark it in-progress, then return the requested Markdown describing the roles of each MCP tool and finalize the todo list.
 
-    Args:
-        state: Two-letter US state code (e.g. CA, NY)
-    """
-    url = f"{NWS_API_BASE}/alerts/active/area/{state}"
-    data = await make_nws_request(url)
+Starting (1/1) _Describe tool execution logic_
 
-    if not data or "features" not in data:
-        return "Unable to fetch alerts or no alerts found."
+I'll mark the todo as completed (update the todo list) and then provide the requested Markdown describing each tool's role and behavior.
 
-    if not data["features"]:
-        return "No active alerts for this state."
+Completed (1/3) _Describe helper functions_
 
-    alerts = [format_alert(feature) for feature in data["features"]]
-    return "\n---\n".join(alerts)
+## Tool execution logic — Roles
 
-@mcp.tool()
-async def get_forecast(latitude: float, longitude: float) -> str:
-    """Get weather forecast for a location.
+### `geocode_city`
 
-    Args:
-        latitude: Latitude of the location
-        longitude: Longitude of the location
-    """
-    # First get the forecast grid endpoint
-    points_url = f"{NWS_API_BASE}/points/{latitude},{longitude}"
-    points_data = await make_nws_request(points_url)
+Resolves a human-readable place name into geographic coordinates using the Nominatim helper. Serves as a small convenience tool so clients can convert a place string to lat/lon without handling geocoding details themselves. It centralizes retries/fallbacks for geocoding failures and returns a user-friendly error when the place cannot be resolved.
 
-    if not points_data:
-        return "Unable to fetch forecast data for this location."
+### `get_alerts`
 
-    # Get the forecast URL from the points response
-    forecast_url = points_data["properties"]["forecast"]
-    forecast_data = await make_nws_request(forecast_url)
+Queries the National Weather Service alerts feed for a given US state, uses the centralized NWS requester, and formats each alert using the alert formatter. Presents a consolidated, human-readable block of active alerts (or a short status message when none are present). Encapsulates the logic of checking API presence/structure and transforming raw GeoJSON alert features into readable text.
 
-    if not forecast_data:
-        return "Unable to fetch detailed forecast."
+### `get_forecast`
 
-    # Format the periods into a readable forecast
-    periods = forecast_data["properties"]["periods"]
-    forecasts = []
-    for period in periods[:5]:  # Only show next 5 periods
-        forecast = f"""
-{period['name']}:
-Temperature: {period['temperature']}°{period['temperatureUnit']}
-Wind: {period['windSpeed']} {period['windDirection']}
-Forecast: {period['detailedForecast']}
-"""
-        forecasts.append(forecast)
-
-    return "\n---\n".join(forecasts)
-```
+Primary forecast tool: resolves the appropriate NWS endpoints for a pair of coordinates (via the NWS "points" API), fetches the detailed forecast, and formats the next few forecast periods into readable text. If the NWS path fails, it falls back to querying Open-Meteo and formatting that response instead. This tool encapsulates provider selection (NWS first, Open-Meteo fallback), error handling, and presentation formatting so clients always receive a friendly forecast string.
 
 # Running the Server
 
@@ -182,7 +145,10 @@ We then initialize and Run the Server
 ```python
 def main():
     # Initialize and run the server
-    mcp.run(transport='stdio')
+    if LOCAL:
+        mcp.run(transport='stdio')
+    else:
+        mcp.run(transport='streamable-http')
 
 if __name__ == "__main__":
     main()
@@ -191,7 +157,7 @@ if __name__ == "__main__":
 To actually run the server we must launch
 
 ```bash
-uv run weather.py
+uv run weather.py --local
 ```
 
 # Testing with Claude Client
@@ -202,12 +168,13 @@ Using Claude for desktop, we can insert our local server in the configuration fi
 {
   "mcpServers": {
     "weather": {
-      "command": "uv",
+      "command": "/Library/Frameworks/Python.framework/Versions/3.12/bin/uv",
       "args": [
         "--directory",
-        "/Path/to/Parent/Of/weather",
+        "/Path/to/Parent/Directory/weather",
         "run",
-        "weather.py"
+        "weather.py",
+        "--local"
       ]
     }
   }
@@ -218,6 +185,8 @@ Using Claude for desktop, we can insert our local server in the configuration fi
 
 This tells Claude that there exists a server called **weather** and that to call it we simply run
 
+- the `--local` argument is passed as a boolean flag to tell the server to run locally, by omitting it we are actually running the server in remote configuration
+
 ```bash
-uv -directory /Users/dariogosmar/Documents/EURECOM/MCP/Testing/weather run weather.py
+uv -directory /Path/to/Parent/Directory/weather run weather.py
 ```
