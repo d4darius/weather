@@ -116,16 +116,6 @@ Transforms Open-Meteo response payloads into a concise, readable forecast summar
 
 The tool execution logic is responsible for actually executing the logic of each tool.
 
-I'll create a short todo entry and mark it in-progress, then return the requested Markdown describing the roles of each MCP tool and finalize the todo list.
-
-Starting (1/1) _Describe tool execution logic_
-
-I'll mark the todo as completed (update the todo list) and then provide the requested Markdown describing each tool's role and behavior.
-
-Completed (1/3) _Describe helper functions_
-
-## Tool execution logic — Roles
-
 ### `geocode_city`
 
 Resolves a human-readable place name into geographic coordinates using the Nominatim helper. Serves as a small convenience tool so clients can convert a place string to lat/lon without handling geocoding details themselves. It centralizes retries/fallbacks for geocoding failures and returns a user-friendly error when the place cannot be resolved.
@@ -190,3 +180,4 @@ This tells Claude that there exists a server called **weather** and that to call
 ```bash
 uv -directory /Path/to/Parent/Directory/weather run weather.py
 ```
+
