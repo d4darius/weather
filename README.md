@@ -1,8 +1,6 @@
-# Basic MCP server for weather querying
+# MCP server for travel planning
 
-This document is a report from the tutorial showcased on the official MCP page about building an MCP server.
-
-<aside>
+This document is based on the tutorial showcased on the official MCP page about building an MCP server and expands it by using the weather information to plan flights
 
 # Initial Considerations
 
@@ -32,7 +30,6 @@ They must follow certain specifications.
 
 - Python 3.10 or higher installed.
 - You must use the Python MCP SDK 1.2.0 or higher.
-</aside>
 
 # Environment Setup
 
@@ -81,7 +78,10 @@ else:
 # Constants
 NWS_API_BASE = "https://api.weather.gov"
 OPENMETEO_API_BASE = "https://api.open-meteo.com/v1"
+IPLOC_API_BASE = "http://ip-api.com/json/"
+GOOGLEFL_API_BASE = "https://serpapi.com/search?engine=google_flights"
 USER_AGENT = "weather-app/1.0"
+TODAY_DATE = "2025-10-21"
 ```
 
 The FastMCP class uses Python type hints and docstrings to automatically generate tool definitions, making it easy to create and maintain MCP tools.
@@ -112,6 +112,10 @@ Fallback weather fetcher that queries the Open-Meteo API for current conditions 
 
 Transforms Open-Meteo response payloads into a concise, readable forecast summary (current conditions plus the next few days). Used to present the Open-Meteo fallback data in the same human-friendly format as the primary forecast output.
 
+### `make_iploc_request`
+
+Fetches the current city of the user based on their IP address using the ip-api service. This function acts as a fallback mechanism to determine the user's location when no explicit input is provided. It handles network errors gracefully and ensures a default value is returned if the location cannot be resolved.
+
 ## Tool Execution Logic
 
 The tool execution logic is responsible for actually executing the logic of each tool.
@@ -127,6 +131,14 @@ Queries the National Weather Service alerts feed for a given US state, uses the 
 ### `get_forecast`
 
 Primary forecast tool: resolves the appropriate NWS endpoints for a pair of coordinates (via the NWS "points" API), fetches the detailed forecast, and formats the next few forecast periods into readable text. If the NWS path fails, it falls back to querying Open-Meteo and formatting that response instead. This tool encapsulates provider selection (NWS first, Open-Meteo fallback), error handling, and presentation formatting so clients always receive a friendly forecast string.
+
+### `get_current_location`
+
+Determines the user's current city based on their IP address using the ip-api service. This tool acts as a convenience method to fetch the user's location without requiring manual input. It ensures graceful handling of errors and provides a default value if the location cannot be resolved.
+
+### `get_flights`
+
+Fetches a list of flights between two airports based on their IATA codes. This tool queries the Google Flights API to retrieve flight details, including departure time, duration, and price. It sorts the flights by departure time and formats the results into a human-readable list. Handles API errors gracefully and ensures a user-friendly output.
 
 # Running the Server
 
@@ -181,3 +193,50 @@ This tells Claude that there exists a server called **weather** and that to call
 uv -directory /Path/to/Parent/Directory/weather run weather.py
 ```
 
+### Testing Prompt Example
+
+Suppose that we want to use the host application to travel to Barcelona. We can start by inputting a system prompt like this one:
+
+```text
+Suppose that you are a travel assistant that wants to help me book a flight to my destination holiday. Your workflow is the following:
+- Check that my destination weather is pleasing -> not rainy, not too cold or not too hot (temperature between 20 and 25°C)
+- If the weather is not pleasing propose an alternative destination similar to the one provided, otherwise continue
+- Provide the list of flight from the user's current location nearest airport and the airport closest to the destination
+
+Please follow the workflow and help me with the task
+```
+
+The Host will ask us about where we would like to go, then check for the weather and based on that will then provide a list of potential flights:
+
+```text
+Here are the available flights from Nice Côte d'Azur Airport (NCE) to Barcelona (BCN):
+
+Vueling VY 1520
+
+Departure Time: 2025-10-21 23:45
+Duration: 85 minutes
+Price: 47 EUR
+
+ITA AZ 355
+
+Departure Time: 2025-10-21 19:25
+Duration: 230 minutes
+Price: 218 EUR
+
+SWISS LX 569
+
+Departure Time: 2025-10-21 15:05
+Duration: 245 minutes
+Price: 310 EUR
+...
+```
+
+# APIs Used
+
+This project leverages several APIs to provide weather and travel-related functionalities:
+
+- **Nominatim (OpenStreetMap)**: Used for geocoding, converting place names into geographic coordinates.
+- **National Weather Service (NWS)**: Provides detailed weather forecasts and alerts for the United States.
+- **Open-Meteo**: Acts as a fallback weather provider, offering current conditions and short-range forecasts globally.
+- **ip-api**: Determines the user's current location based on their IP address.
+- **Google Flights API (via SERPAPI)**: Fetches flight details, including departure times, durations, and prices, between specified airports.

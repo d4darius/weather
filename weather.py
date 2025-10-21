@@ -1,8 +1,10 @@
 from typing import Any
 import httpx
 from mcp.server.fastmcp import FastMCP
+from datetime import date
 import os
 import argparse
+from keys import SERPAPI_KEY
 
 args = argparse.ArgumentParser()
 args.add_argument("--local", action="store_true", help="Run the server in local mode (stdio transport)")
@@ -23,7 +25,10 @@ else:
 # Constants
 NWS_API_BASE = "https://api.weather.gov"
 OPENMETEO_API_BASE = "https://api.open-meteo.com/v1"
+IPLOC_API_BASE = "http://ip-api.com/json/"
+GOOGLEFL_API_BASE = "https://serpapi.com/search?engine=google_flights"
 USER_AGENT = "weather-app/1.0"
+TODAY_DATE = date.today().isoformat()+""
 
 # Geocoding (Nominatim)
 # API_BASE: base URL to perform geocoding information on a city (like Turin)
@@ -122,6 +127,21 @@ Next 3 Days Forecast:
     
     return forecast
 
+async def make_iploc_request() -> dict[str, Any] | str:
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(IPLOC_API_BASE, timeout=30.0)
+            response.raise_for_status()
+            data = response.json()
+
+            if data.get('status') == 'success':
+                return data.get("city", "Antibes")
+            else:
+                return None
+
+        except (httpx.HTTPStatusError, httpx.RequestError) as e:
+            return None
+
 # ------------------
 # TOOLS
 # ------------------
@@ -199,6 +219,71 @@ async def get_forecast(latitude: float, longitude: float) -> str:
     if openmeteo_data:
         return format_openmeteo_forecast(openmeteo_data)
     return "Unable to fetch forecast data from any provider."
+
+@mcp.tool()
+async def get_current_location() -> str:
+    """Get the current city of the user
+    """
+    result = await make_iploc_request()
+
+    if not result:
+        return "Unable to geocode the user location."
+    return result
+
+@mcp.tool()
+async def get_flights(dept_iata: str, arr_iata: str) -> str:
+    """Given departure and arrival airport IATA codes it returns the top 10 flights ordered 
+    by departure time
+
+    Args:
+        dept_iata: the iata code for the departure airport
+        arr_iata: the iata code for the arrival airport
+    """
+    # Filter flights based on the departure and arrival airport and sorts them by price
+    params = {
+        'api_key': SERPAPI_KEY,
+        'engine': 'google_flights',
+        'departure_id': dept_iata,
+        'arrival_id': arr_iata,
+        'type': 2,
+        'outbound_date': TODAY_DATE,
+        'sort_by': 2
+    }
+
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(GOOGLEFL_API_BASE, params=params, timeout=30.0)
+            resp.raise_for_status()
+
+            data = resp.json()
+            flight_offers = data.get('other_flights', []) + data.get('best_flights', [])
+
+            if flight_offers:
+                # sort flights according to their departure time
+                printout_flights = []
+                printout_flights.append(f"--- Active & Scheduled Flights from {dept_iata} to {arr_iata} ---\n")
+                for offer in flight_offers:
+                    # Access the details of the first flight segment
+                    first_segment = offer.get("flights", [{}])[0]
+                    
+                    airline = first_segment.get("airline")
+                    flight_num = first_segment.get("flight_number")
+                    dep_time = first_segment.get("departure_airport", {}).get("time")
+                    price = offer.get("price")
+
+                    fl = f""" 
+                            Flight: {airline} {flight_num}
+                            Departure Time: {dep_time}
+                            Total Duration: {offer.get("total_duration")} minutes
+                            Price: {price} {data.get("search_parameters", {}).get("currency", "EUR")}
+                            """
+                    printout_flights.append(fl)
+                
+                return "\n---\n".join(printout_flights)
+            else:
+                return f"No active or scheduled flights found between {dept_iata} and {arr_iata} for the current real-time window."
+        except (httpx.HTTPStatusError, httpx.RequestError) as e:
+            return f"Unable to fetch flight data due to a network or API error: {e}"
 
 
 
