@@ -4,13 +4,17 @@ from mcp.server.fastmcp import FastMCP
 from datetime import date
 import os
 import argparse
-from keys import SERPAPI_KEY
+from dotenv import load_dotenv
+
+load_dotenv()
 
 args = argparse.ArgumentParser()
 args.add_argument("--local", action="store_true", help="Run the server in local mode (stdio transport)")
 opt = args.parse_args()
 
 LOCAL = opt.local
+
+SERPAPI_KEY = os.getenv("SERPAPI_KEY")
 
 # Initialize FastMCP server
 if LOCAL:
