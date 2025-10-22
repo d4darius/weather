@@ -1,6 +1,7 @@
 # MCP server for travel planning
 
 This document is based on the tutorial showcased on the official MCP page about building an MCP server and expands it by using the weather information to plan flights
+- The link to the official repo is the following: https://github.com/modelcontextprotocol/quickstart-resources/tree/main/weather-server-python
 
 # Initial Considerations
 
@@ -240,3 +241,4 @@ This project leverages several APIs to provide weather and travel-related functi
 - **Open-Meteo**: Acts as a fallback weather provider, offering current conditions and short-range forecasts globally.
 - **ip-api**: Determines the user's current location based on their IP address.
 - **Google Flights API (via SERPAPI)**: Fetches flight details, including departure times, durations, and prices, between specified airports.
+
