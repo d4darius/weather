@@ -1,6 +1,7 @@
 # MCP server for travel planning
 
 This document is based on the tutorial showcased on the official MCP page about building an MCP server and expands it by using the weather information to plan flights
+
 - The link to the official repo is the following: https://github.com/modelcontextprotocol/quickstart-resources/tree/main/weather-server-python
 
 # Initial Considerations
@@ -232,6 +233,25 @@ Price: 310 EUR
 ...
 ```
 
+# Docker - build and run
+
+This repository includes a `Dockerfile` and a `docker-compose.yml` so you can run the MCP server in a container.
+
+1. Build the image
+
+```bash
+# build a local image tagged "weather:latest"
+docker build -t weather:latest .
+```
+
+Run the container (HTTP / streamable mode — recommended for production)
+Expose the server port (default 10000). The container reads environment variables from a .env file (or pass them explicitly).
+Or pass single env vars directly:
+
+```bash
+docker run -d --name weather -p 10000:10000 -e SERPAPI_KEY="your_serpapi_key"
+```
+
 # APIs Used
 
 This project leverages several APIs to provide weather and travel-related functionalities:
@@ -242,3 +262,6 @@ This project leverages several APIs to provide weather and travel-related functi
 - **ip-api**: Determines the user's current location based on their IP address.
 - **Google Flights API (via SERPAPI)**: Fetches flight details, including departure times, durations, and prices, between specified airports.
 
+```
+
+```

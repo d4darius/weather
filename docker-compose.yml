@@ -1,0 +1,19 @@
+services:
+  weather:
+    build: .
+    image: weather-app:latest
+    container_name: weather_app
+    ports:
+      - "10000:10000"
+    env_file:
+      - .env
+    environment:
+      - PORT=10000
+    # Mount only the source and .env so the image-created /app/.venv and installed packages are preserved
+    volumes:
+      - ./src:/app/src:delegated
+      - ./.env:/app/.env:ro
+    restart: unless-stopped
+    command: ["uv", "run", "src/weather.py"]
+    healthcheck:
+      disable: true
